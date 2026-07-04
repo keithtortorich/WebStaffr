@@ -1,6 +1,8 @@
 import os
 import unittest
 
+import httpx
+
 from webstaffr.db import connect, migrate
 from webstaffr.tenant import Tenant
 from webstaffr.workers.angel.angel import Angel, load_prompt_template
@@ -15,6 +17,22 @@ from webstaffr.workers.angel.voice import (
     NullVoiceBackend,
     VoiceBackendNotConfiguredError,
 )
+
+
+class _FakeHTTPResponse:
+    """Minimal stand-in for an httpx.Response, used to test
+    GrokVoiceBackend.respond() without a real network call."""
+
+    def __init__(self, json_data, status_code=200):
+        self._json = json_data
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("simulated error status", request=None, response=self)
+
+    def json(self):
+        return self._json
 
 
 class AngelTestCase(unittest.TestCase):
@@ -155,10 +173,40 @@ class TestVoiceBackends(unittest.TestCase):
             if old is not None:
                 os.environ["GROK_API_KEY"] = old
 
-    def test_grok_backend_accepts_explicit_key_but_respond_is_not_implemented(self):
+    def test_grok_backend_returns_content_from_successful_api_call(self):
+        """GrokVoiceBackend.respond() now makes a real xAI API call --
+        mocked here rather than hitting the network. No live xAI account
+        is available in this environment, and this test suite never makes
+        real network calls anywhere else (NullVoiceBackend/NullGHLClient
+        follow the same offline-by-default rule)."""
         backend = GrokVoiceBackend(api_key="test-key")
-        with self.assertRaises(NotImplementedError):
-            backend.respond("hello", {})
+        backend.client.post = lambda *a, **k: _FakeHTTPResponse(
+            {"choices": [{"message": {"content": "Hello from Grok"}}]}
+        )
+        reply = backend.respond("hi", {"system_prompt": "You are Angel."})
+        self.assertEqual(reply, "Hello from Grok")
+
+    def test_grok_backend_degrades_gracefully_on_transport_failure(self):
+        backend = GrokVoiceBackend(api_key="test-key")
+
+        def _boom(*args, **kwargs):
+            raise httpx.RequestError("simulated network failure")
+
+        backend.client.post = _boom
+        reply = backend.respond("hi", {})
+        self.assertIsInstance(reply, str)
+        self.assertNotEqual(reply, "")
+
+    def test_grok_backend_degrades_gracefully_on_malformed_response(self):
+        """An unexpected response shape (e.g. xAI changing their API) must
+        still degrade to the fallback reply, not raise into the caller --
+        but see test_router.py/health_check.py for the logging distinction
+        this case gets versus a transport failure."""
+        backend = GrokVoiceBackend(api_key="test-key")
+        backend.client.post = lambda *a, **k: _FakeHTTPResponse({"unexpected": "shape"})
+        reply = backend.respond("hi", {})
+        self.assertIsInstance(reply, str)
+        self.assertNotEqual(reply, "")
 
 
 class TestGHLClients(unittest.TestCase):
