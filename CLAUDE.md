@@ -26,9 +26,10 @@ Effective 2026-07-04, this document adopts a higher-autonomy operating model, su
 Before every task, select the most cost-effective approach sufficient for the task, in this order of preference:
 1. Automation / scripts (preferred).
 2. Local or cheaper models.
-3. Claude Sonnet or equivalent.
+3. Claude Sonnet 5 (current default for this project) or equivalent.
 4. Claude Opus only when truly necessary.
-Reserve premium reasoning for architecture, security, complex debugging, integration work, and final reviews.
+
+Claude Sonnet 5 is the default model for all planning, implementation, testing, documentation, and day-to-day reasoning on this project. A new chat on Opus is recommended only for: high-stakes architectural decisions affecting long-term system shape; security or tenant-isolation reviews; complex cross-component reasoning or major refactoring; resolving significant governance conflicts; a final quality gate before major structural changes. Fable is not used for engineering or technical work on this project.
 
 ## Execution Phases
 1. **Phase 1 — Governance & Foundation.** Governance documents (this file, PROJECT.md, ARCHITECTURE.md, DECISIONS.md, TASKS.md, README.md) plus core infrastructure (auth, DB, API, CI/CD, secrets, testing, monitoring, deployment) needed to run the system safely. Scope and sequencing of the infrastructure portion is a founder-decision where it would supersede an existing DECISIONS.md entry (see Current Status).
