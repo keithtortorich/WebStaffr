@@ -42,6 +42,14 @@ Each recorded decision includes:
 **Tradeoffs accepted:** less upfront specification of long-term phases in exchange for less speculative work; self-approval for a narrowly-defined safe category (reversible, no external interaction, no architecture/data-model shift, no new dependency) trades a small amount of oversight for reduced founder involvement, mitigated by mandatory logging of every self-approved change in commit messages and `TASKS.md`.
 **Status:** active.
 
+**Decision:** Adopt an autonomous Engineering Director operating model in CLAUDE.md, replacing the strict per-phase approval-gate model (Assessment → Design → Build with mandatory stop-and-wait between phases) with a Decision Framework (founder-decision vs. AI-decision categories), an AI resource/cost strategy, four concrete execution phases (Governance & Foundation, Legacy Audit & Migration, Iterative Feature Development, Continuous Improvement), and explicit self-healing/chaos-engineering practices.
+**Date:** 2026-07-04
+**Context:** The founder provided a new operating directive in-session, explicitly stating it should replace prior strategy and thought-process rules, after a session in which strict per-item approval gating on git/repo mechanics created friction disproportionate to the risk of the actions involved.
+**Alternatives considered:** keeping the existing Assessment/Design/Build gate model unchanged; adopting the new directive's language verbatim with no reconciliation against existing repo state.
+**Reason rejected:** the old model's blanket stop-and-wait ceremony did not scale to routine, low-risk repo mechanics and was explicitly identified by the founder as not working; adopting the new directive verbatim without reconciliation would have silently overridden the still-active, explicitly recorded minimal-first-slice decision below without surfacing the conflict, violating this project's own Memory and Record Integrity rule.
+**Tradeoffs accepted:** less per-item founder involvement in exchange for founder-declared trust in best-practice autonomous execution; safety is preserved by keeping an unchanged, explicit escalation list (product direction, budget, legal/compliance, vendor selection, major architecture, material cost/schedule impact, and anything reversing a recorded decision) rather than removing escalation altogether.
+**Status:** active. Note: this decision governs *how Claude operates*; it does not itself resolve the still-open Phase 1 scope question raised the same day (see "First system behavior is internal workflow execution" above, and TASKS.md item 1).
+
 ## Tradeoffs Accepted
 See individual decisions above.
 
