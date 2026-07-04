@@ -9,6 +9,13 @@ Claude operates this queue via a single loop: Verify -> Decide -> Execute -> Ver
 ## Current Queue
 Owner noted per item per the Claude/Grok coordination protocol (see DECISIONS.md). Items marked (Grok) are an explicit invitation to extend a specific existing Claude-owned file per that protocol's "unless explicitly invited" exception -- not a blanket reopening of ownership. Grouped by priority tier, not just a flat list, so the next session can start at the top without re-deriving order from chat history.
 
+### Coordination Plan (Grok + Claude)
+Refined 2026-07-04 after this session's ownership-boundary friction. Adds process on top of the priority queue below; doesn't replace it -- the queue keeps the specific rationale for each item (why P0-2 is a data-model decision, why P2 is actually blocked, etc.), which a compressed rules-only doc would lose.
+
+- **Parallel work split**: Claude -- site generator, widget wiring, Docker, `angel.py` integration, frontend, governance/docs. Grok -- resilience and test coverage *strictly within* `voice.py`, `ghl.py`, or genuinely new files (not a general "backend resilience" mandate that could read as covering `angel.py` again); credential/secrets pattern docs; Docker verification as proposals only, never direct edits.
+- **Review & Merge Gate**: paste -> full test run (`unittest discover -s tests` + `health_check.py`) -> commit. Grok has committed to running the suite on its own proposals before handing them off where possible -- a helpful extra check, not a replacement for this gate. Nothing lands on `main` without the full suite passing here too.
+- **Sync & handoff**: regular paste syncs during a session; end-of-session updates to this file and `DECISIONS.md` stay single-narrated (see Process notes below) even when both assistants contributed content to a session -- avoids two independent writers drifting on the same ledger.
+
 **Before starting anything below**: run `./.venv/bin/python -m unittest discover -s tests` and `./.venv/bin/python scripts/health_check.py`. Both should be green (last confirmed: 54/54 tests, HEALTHY, commit `cd5020d`). If either isn't, that's the actual first task, regardless of what's listed here.
 
 ### P0 -- Founder-only, blocks everything below it
