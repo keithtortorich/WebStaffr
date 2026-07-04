@@ -42,13 +42,44 @@ class Angel:
         voice_backend: Optional[VoiceBackend] = None,
         ghl_client: Optional[GHLClient] = None,
         business_name: str = "your business",
+        ghl_max_attempts: int = 3,
     ) -> None:
+        if ghl_max_attempts < 1:
+            raise ValueError("ghl_max_attempts must be >= 1.")
         self.tenant = tenant
         self.conn = conn
         self.voice_backend = voice_backend or NullVoiceBackend()
         self.ghl_client = ghl_client or NullGHLClient()
         self.business_name = business_name
+        self.ghl_max_attempts = ghl_max_attempts
         self._appointments = AppointmentRepository(conn)
+
+    def _call_ghl_with_retry(self, fn, *, description: str):
+        """Calls `fn()` with up to `self.ghl_max_attempts` attempts on any
+        exception -- same bounded-retry shape as WorkflowExecutor._run_step
+        (repeated attempts, no sleep/backoff between them). No delay is
+        deliberate: this runs inline within a live conversation turn or an
+        HTTP request, where a real backoff delay would stall the caller;
+        bounding the *attempt count* is what buys resilience against a
+        transient blip without also making failures slow. Re-raises the
+        last exception if every attempt fails, leaving the caller's
+        existing try/except to decide how to degrade -- this only adds
+        retry, it doesn't change the failure contract."""
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, self.ghl_max_attempts + 1):
+            try:
+                return fn()
+            except Exception as exc:  # noqa: BLE001 -- retried broadly, same as WorkflowExecutor
+                last_exc = exc
+                logger.warning(
+                    "ghl_call_attempt_failed tenant=%s description=%s attempt=%d/%d error=%s",
+                    self.tenant.tenant_id,
+                    description,
+                    attempt,
+                    self.ghl_max_attempts,
+                    exc,
+                )
+        raise last_exc
 
     def build_context(self, extra: Optional[dict] = None) -> dict:
         """Dynamic context loading: assembles what Angel knows for this
@@ -120,14 +151,18 @@ class Angel:
 
         if sync_to_ghl and ghl_contact_id:
             try:
-                self.ghl_client.create_appointment(ghl_contact_id, starts_at, notes or "")
+                self._call_ghl_with_retry(
+                    lambda: self.ghl_client.create_appointment(ghl_contact_id, starts_at, notes or ""),
+                    description="create_appointment",
+                )
                 self._appointments.mark_ghl_synced(self.tenant.tenant_id, appt.appointment_id)
                 appt.ghl_synced = True
             except Exception as exc:  # noqa: BLE001 -- GHL failure must not break booking
                 logger.warning(
-                    "ghl_sync_failed tenant=%s appointment_id=%s error=%s",
+                    "ghl_sync_failed tenant=%s appointment_id=%s attempts=%d error=%s",
                     self.tenant.tenant_id,
                     appt.appointment_id,
+                    self.ghl_max_attempts,
                     exc,
                 )
 
@@ -138,8 +173,16 @@ class Angel:
         raising -- a note-logging failure is never allowed to break the
         conversation flow that triggered it."""
         try:
-            self.ghl_client.log_note(ghl_contact_id, note)
+            self._call_ghl_with_retry(
+                lambda: self.ghl_client.log_note(ghl_contact_id, note),
+                description="log_note",
+            )
             return True
         except Exception as exc:  # noqa: BLE001
-            logger.warning("ghl_note_log_failed tenant=%s error=%s", self.tenant.tenant_id, exc)
+            logger.warning(
+                "ghl_note_log_failed tenant=%s attempts=%d error=%s",
+                self.tenant.tenant_id,
+                self.ghl_max_attempts,
+                exc,
+            )
             return False

@@ -119,13 +119,18 @@ class TestAngelBooking(AngelTestCase):
 
     def test_ghl_sync_failure_does_not_break_local_booking(self):
         class BoomGHLClient:
+            def __init__(self):
+                self.create_appointment_calls = 0
+
             def log_note(self, contact_id, note):
                 raise RuntimeError("simulated GHL outage")
 
             def create_appointment(self, contact_id, starts_at, notes):
+                self.create_appointment_calls += 1
                 raise RuntimeError("simulated GHL outage")
 
-        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=BoomGHLClient())
+        ghl = BoomGHLClient()
+        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=ghl)
         appt = angel.book_appointment(
             contact_name="Jane Doe",
             starts_at="2026-08-01T15:00:00Z",
@@ -135,6 +140,35 @@ class TestAngelBooking(AngelTestCase):
         # Local booking must still have succeeded despite the GHL failure.
         self.assertIsNotNone(appt.appointment_id)
         self.assertFalse(appt.ghl_synced)
+        # Default ghl_max_attempts=3 -- confirms retry actually happened,
+        # not just a single failed attempt.
+        self.assertEqual(ghl.create_appointment_calls, 3)
+
+    def test_book_appointment_retries_and_succeeds_after_transient_ghl_failures(self):
+        class FlakyGHLClient:
+            def __init__(self, fail_times):
+                self.fail_times = fail_times
+                self.calls = 0
+
+            def create_appointment(self, contact_id, starts_at, notes):
+                self.calls += 1
+                if self.calls <= self.fail_times:
+                    raise RuntimeError("simulated transient GHL outage")
+                return {"contact_id": contact_id, "ghl_id": "ghl_1"}
+
+            def log_note(self, contact_id, note):
+                raise AssertionError("not exercised by this test")
+
+        ghl = FlakyGHLClient(fail_times=2)
+        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=ghl)
+        appt = angel.book_appointment(
+            contact_name="Jane Doe",
+            starts_at="2026-08-01T15:00:00Z",
+            sync_to_ghl=True,
+            ghl_contact_id="ghl_contact_123",
+        )
+        self.assertTrue(appt.ghl_synced)
+        self.assertEqual(ghl.calls, 3)
 
 
 class TestAngelGHLNotes(AngelTestCase):
@@ -147,15 +181,62 @@ class TestAngelGHLNotes(AngelTestCase):
 
     def test_log_note_to_ghl_returns_false_on_failure_without_raising(self):
         class BoomGHLClient:
+            def __init__(self):
+                self.log_note_calls = 0
+
             def log_note(self, contact_id, note):
+                self.log_note_calls += 1
                 raise RuntimeError("simulated GHL outage")
 
             def create_appointment(self, contact_id, starts_at, notes):
-                raise RuntimeError("simulated GHL outage")
+                raise AssertionError("not exercised by this test")
 
-        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=BoomGHLClient())
+        ghl = BoomGHLClient()
+        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=ghl)
         ok = angel.log_note_to_ghl("ghl_contact_123", "Called about pricing.")
         self.assertFalse(ok)
+        self.assertEqual(ghl.log_note_calls, 3)
+
+    def test_log_note_to_ghl_retries_and_succeeds_after_transient_failures(self):
+        class FlakyGHLClient:
+            def __init__(self, fail_times):
+                self.fail_times = fail_times
+                self.calls = 0
+
+            def log_note(self, contact_id, note):
+                self.calls += 1
+                if self.calls <= self.fail_times:
+                    raise RuntimeError("simulated transient GHL outage")
+
+            def create_appointment(self, contact_id, starts_at, notes):
+                raise AssertionError("not exercised by this test")
+
+        ghl = FlakyGHLClient(fail_times=1)
+        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=ghl)
+        ok = angel.log_note_to_ghl("ghl_contact_123", "Called about pricing.")
+        self.assertTrue(ok)
+        self.assertEqual(ghl.calls, 2)
+
+    def test_ghl_max_attempts_is_configurable_and_validated(self):
+        with self.assertRaises(ValueError):
+            Angel(tenant=self.tenant, conn=self.conn, ghl_max_attempts=0)
+
+        class AlwaysFailsGHLClient:
+            def __init__(self):
+                self.calls = 0
+
+            def log_note(self, contact_id, note):
+                self.calls += 1
+                raise RuntimeError("simulated GHL outage")
+
+            def create_appointment(self, contact_id, starts_at, notes):
+                raise AssertionError("not exercised by this test")
+
+        ghl = AlwaysFailsGHLClient()
+        angel = Angel(tenant=self.tenant, conn=self.conn, ghl_client=ghl, ghl_max_attempts=1)
+        ok = angel.log_note_to_ghl("ghl_contact_123", "note")
+        self.assertFalse(ok)
+        self.assertEqual(ghl.calls, 1)
 
 
 class TestVoiceBackends(unittest.TestCase):
