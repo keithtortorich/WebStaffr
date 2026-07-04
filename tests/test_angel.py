@@ -29,11 +29,39 @@ class AngelTestCase(unittest.TestCase):
 
 
 class TestPromptTemplate(unittest.TestCase):
-    def test_prompt_template_loads_and_is_labeled_as_draft(self):
+    def test_prompt_template_loads_real_founder_prompt(self):
         text = load_prompt_template()
-        self.assertIn("Angel", text)
-        # It must be honest about being a placeholder until the real prompt exists.
-        self.assertIn("DRAFT PLACEHOLDER", text)
+        # The founder's real prompt, synced from Drive -- no longer a
+        # placeholder. Check for content specific to the real text so this
+        # test actually fails if the file regresses to something else.
+        self.assertIn("AI receptionist for local home service businesses", text)
+        self.assertIn("Always get explicit confirmation before booking", text)
+        self.assertNotIn("DRAFT PLACEHOLDER", text)
+
+
+class TestRenderPrompt(AngelTestCase):
+    def test_render_prompt_includes_core_prompt_and_dynamic_context(self):
+        angel = Angel(tenant=self.tenant, conn=self.conn, business_name="Joe's Plumbing")
+        context = angel.build_context({"caller_name": "Pat"})
+        rendered = angel.render_prompt(context)
+
+        self.assertIn("You are Angel", rendered)
+        self.assertIn("Dynamic context for this session:", rendered)
+        self.assertIn("business_name: Joe's Plumbing", rendered)
+        self.assertIn("caller_name: Pat", rendered)
+
+    def test_respond_attaches_rendered_system_prompt_to_context(self):
+        captured = {}
+
+        class CapturingBackend:
+            def respond(self, message, context):
+                captured.update(context)
+                return "ok"
+
+        angel = Angel(tenant=self.tenant, conn=self.conn, voice_backend=CapturingBackend())
+        angel.respond("hello")
+        self.assertIn("system_prompt", captured)
+        self.assertIn("You are Angel", captured["system_prompt"])
 
 
 class TestAngelRespond(AngelTestCase):

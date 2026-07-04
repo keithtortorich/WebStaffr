@@ -25,8 +25,9 @@ _PROMPT_PATH = Path(__file__).parent / "angel_prompt.md"
 
 
 def load_prompt_template() -> str:
-    """Loads whatever is currently in angel_prompt.md. Swapping that file's
-    content (e.g. for the founder's real prompt) requires no code change."""
+    """Loads whatever is currently in angel_prompt.md (the founder's real
+    core prompt as of 2026-07-04). Swapping that file's content requires
+    no code change here."""
     return _PROMPT_PATH.read_text()
 
 
@@ -63,15 +64,26 @@ class Angel:
         return context
 
     def render_prompt(self, context: dict) -> str:
+        """Combines the static core prompt (angel_prompt.md, verbatim) with
+        this session's dynamic context, per the prompt's own closing
+        instruction: "At the start of every session, you will receive
+        dynamic context... Use it to personalize every response."
+
+        The real prompt has no string-template placeholders to fill in --
+        it's a fixed system prompt. Dynamic context is appended as a
+        clearly separate, structured block rather than interpolated into
+        the prompt text, so the core prompt can be swapped without ever
+        needing to match a particular template shape."""
         template = load_prompt_template()
-        return template.format(
-            business_name=context.get("business_name", self.business_name),
-            tenant_context=context.get("tenant_context", ""),
-        )
+        if not context:
+            return template
+        context_lines = "\n".join(f"- {key}: {value}" for key, value in context.items())
+        return f"{template}\n\nDynamic context for this session:\n{context_lines}"
 
     def respond(self, message: str, extra_context: Optional[dict] = None) -> str:
         """Handle one incoming message and return Angel's reply text."""
         context = self.build_context(extra_context)
+        context["system_prompt"] = self.render_prompt(context)
         logger.info("angel_message_received tenant=%s", self.tenant.tenant_id)
         reply = self.voice_backend.respond(message, context)
         logger.info("angel_message_answered tenant=%s", self.tenant.tenant_id)
