@@ -7,22 +7,35 @@ Single source of next actions. Sorted by smallest atomic step. No future specula
 Claude operates this queue via a single loop: Verify -> Decide -> Execute -> Verify. See CLAUDE.md's "Execution Model" section for the full rule, including which changes may be self-approved versus which require explicit approval.
 
 ## Current Queue
-1. [ ] Decide the first customer-facing or persistence-driven feature to build next -- founder input needed on priority. Any further infrastructure (API, auth, CI/CD, hosting) is added only when a specific feature needs it, per the resolved Phase 1 scope.
-2. [ ] Once a next feature is chosen: make any concrete stack/hosting choice that specific feature needs -- architecture-adjacent, requires explicit approval.
-3. [ ] Consider wiring `scripts/health_check.py` and `python3 -m unittest discover -s tests` into a CI workflow once a CI provider is chosen (not yet chosen -- no infra decision made).
+1. [ ] Founder to supply the real Angel receptionist prompt (referenced in the Angel Package spec as "provided earlier," not found in Drive). Replace `webstaffr/workers/angel/angel_prompt.md` wholesale -- no code change needed.
+2. [ ] Founder to supply real GHL_API_KEY / GHL_LOCATION_ID and/or GROK_API_KEY (as env vars, never committed) to exercise the real integrations locally. Without them the service runs safely on Null backends.
+3. [ ] Implement the actual Grok realtime API call in `GrokVoiceBackend.respond()` once credentials and API docs are available to test against -- currently raises `NotImplementedError` by design.
+4. [ ] Verify Dockerfile/docker-compose.yml actually build and run -- not possible on this machine (no Docker installed). Confirmed instead via direct `uvicorn` run (see DECISIONS.md / session notes).
+5. [ ] AOKAI: still entirely unspecified anywhere in Drive or the Angel Package spec. Deferred, not started.
+6. [ ] Decide what's next after Angel: a `/book` endpoint exposing `Angel.book_appointment` over HTTP (currently only reachable in-process), and/or wiring the widget onto an actual generated site.
 
 ## Completed
 - Governance baseline written and committed: CLAUDE.md, PROJECT.md, ARCHITECTURE.md, DECISIONS.md (2026-07-04).
 - First system behavior decided: internal workflow execution (2026-07-04).
 - Minimal design recorded: tenant_context, workflow_definition, workflow_executor, execution_record (2026-07-04).
 - Single-loop execution model adopted (2026-07-04) -- see CLAUDE.md, DECISIONS.md.
-- Resolved local/remote git divergence (unrelated histories with GitHub's auto-generated `.gitignore`/`README.md`); merged and pushed governance baseline to `github.com/keithtortorich/WebStaffr` at `fc4dc46` (2026-07-04).
-- Diagnosed and cleared repeated `.git` lock-file corruption caused by concurrent access from two different tool paths touching the same repo; standardized on a single real-terminal access path (Desktop Commander) going forward (2026-07-04).
+- Resolved local/remote git divergence; merged and pushed governance baseline to `github.com/keithtortorich/WebStaffr` at `fc4dc46` (2026-07-04).
+- Diagnosed and cleared repeated `.git` lock-file corruption; standardized on Desktop Commander for all git operations (2026-07-04).
 - Removed stale local `master` branch (2026-07-04).
 - Adopted the autonomous Engineering Director operating model in CLAUDE.md (2026-07-04) -- see DECISIONS.md.
-- Resolved the Phase 1 scope conflict: staying strictly minimal, infra added only when a specific feature needs it (2026-07-04) -- see DECISIONS.md.
-- Implemented the first slice: `webstaffr/tenant.py`, `webstaffr/workflow.py`, `webstaffr/execution.py`, `webstaffr/executor.py` -- stdlib-only, in-memory, tenant-scoped, untrusted-input validation on every step, bounded per-step retry, full execution trace (2026-07-04).
-- Added `tests/test_executor.py` (10 tests) and `scripts/health_check.py` (self-healing smoke-test runner) (2026-07-04).
-- Recorded model-usage guideline in CLAUDE.md: Sonnet 5 default, Opus only for high-stakes architecture/security/governance-conflict work, no Fable for engineering (2026-07-04).
-- Added SQLite persistence for WorkflowDefinitions and ExecutionRecords: `webstaffr/db.py` (connection + migrations), `webstaffr/migrations/0001_initial.sql`, `webstaffr/repository.py` (WorkflowRepository, ExecutionRepository), `StepRegistry`/`UnknownStepError`/`step_names`/`from_step_names` added to `webstaffr/workflow.py`, `to_dict`/`from_dict` added to `webstaffr/execution.py`. `tests/test_repository.py` added (11 tests); `scripts/health_check.py` extended with a persistence round-trip check. 21/21 tests passing, health check HEALTHY. Decision recorded in DECISIONS.md (2026-07-04).
-- Fixed a stray escaping artifact in CLAUDE.md (literal backslash-backtick sequences from an earlier heredoc write) -- self-healing, logged here (2026-07-04).
+- Resolved the Phase 1 scope conflict: minimal-first, infra added only when a specific feature needs it (2026-07-04) -- see DECISIONS.md.
+- Implemented the first slice: `webstaffr/tenant.py`, `workflow.py`, `execution.py`, `executor.py` (2026-07-04).
+- Added `tests/test_executor.py` (10 tests) and `scripts/health_check.py` (2026-07-04).
+- Recorded model-usage guideline in CLAUDE.md: Sonnet 5 default, Opus for high-stakes work only (2026-07-04).
+- Added SQLite persistence: `webstaffr/db.py`, `webstaffr/migrations/0001_initial.sql`, `webstaffr/repository.py`. 21/21 tests passing (2026-07-04) -- see DECISIONS.md.
+- Fixed a stray backslash-backtick escaping artifact in CLAUDE.md (2026-07-04).
+- Investigated Google Drive as source of truth for a larger integration request; found significant version sprawl (5+ Business Plan copies, 4 Financial Model copies) and no Angel/AOKAI spec docs at the time; escalated via clarifying questions rather than guessing (2026-07-04).
+- Founder supplied "Angel Package" spec doc in Drive; mirrored locally (labeled, non-authoritative copy) at `docs/drive-mirrors/Angel_Package.md` (2026-07-04).
+- Recorded scope-expansion decision: Angel worker, FastAPI, GoHighLevel, Grok voice, per founder's own spec (2026-07-04) -- see DECISIONS.md.
+- Built Angel worker: `webstaffr/workers/angel/{angel.py, voice.py, ghl.py, booking.py, angel_prompt.md}`. Voice (Grok) and GHL clients are credential-checked interfaces with safe Null defaults for testing/offline use -- neither is a working live integration yet (no credentials available to build/test against). Draft placeholder prompt used since the founder's real prompt wasn't found in Drive (2026-07-04).
+- Added `webstaffr/migrations/0002_angel_appointments.sql` (tenant-scoped appointments table) (2026-07-04).
+- Built FastAPI router (`webstaffr/workers/angel/router.py`): `/health`, `/chat`, `/webhooks/ghl` (website_lead, missed_call). Added `fastapi`, `uvicorn`, `httpx` as new pinned dependencies (`requirements.txt`), first dependencies this repo has ever had (2026-07-04) -- see DECISIONS.md.
+- Built `webstaffr/workers/angel/widget/angel-widget.js` -- vanilla JS embeddable chat widget; voice button present but explicitly informs the visitor voice isn't available yet, rather than silently doing nothing (2026-07-04).
+- Added `Dockerfile`, `docker-compose.yml`, `.dockerignore` for local testing. Not build-verified (no Docker on this machine) -- instead verified the same code path directly via `uvicorn`, hitting `/health`, `/chat`, `/webhooks/ghl` over real HTTP with a real file-based SQLite DB (2026-07-04).
+- Added `tests/test_angel.py` (13 tests) and `tests/test_router.py` (7 tests). Total 40/40 tests passing. Extended `scripts/health_check.py` with `angel_imports`, `angel_booking_round_trip`, `angel_router_smoke` checks -- HEALTHY (2026-07-04).
+- Updated README.md with local dev setup instructions (2026-07-04).

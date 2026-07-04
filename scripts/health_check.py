@@ -130,11 +130,82 @@ def main() -> int:
             # Tenant isolation must hold at the storage layer too.
             assert WorkflowRepository(conn).load("someone_else", "persist_smoke_test", registry) is None
 
+    def check_angel_imports():
+        from webstaffr.workers.angel.angel import Angel, load_prompt_template  # noqa: F401
+        from webstaffr.workers.angel.voice import NullVoiceBackend  # noqa: F401
+        from webstaffr.workers.angel.ghl import NullGHLClient  # noqa: F401
+        from webstaffr.workers.angel.router import create_app  # noqa: F401
+
+    def check_angel_booking_round_trip():
+        from webstaffr.tenant import Tenant
+        from webstaffr.db import connect, migrate
+        from webstaffr.workers.angel.angel import Angel
+        from webstaffr.workers.angel.ghl import NullGHLClient
+        from webstaffr.workers.angel.booking import AppointmentRepository
+
+        with connect(":memory:") as conn:
+            migrate(conn)
+            tenant = Tenant(tenant_id="healthcheck")
+            ghl = NullGHLClient()
+            angel = Angel(tenant=tenant, conn=conn, ghl_client=ghl)
+
+            appt = angel.book_appointment(
+                contact_name="Health Check",
+                starts_at="2026-08-01T00:00:00Z",
+                sync_to_ghl=True,
+                ghl_contact_id="hc_contact",
+            )
+            assert appt.appointment_id is not None
+            assert appt.ghl_synced is True, "expected GHL sync to succeed against NullGHLClient"
+
+            stored = AppointmentRepository(conn).list_for_tenant("healthcheck")
+            assert stored == [appt.appointment_id]
+
+    def check_angel_router_smoke():
+        # FastAPI's TestClient -- no real network socket, no external process.
+        # Uses a real temp file, not ":memory:" -- each sqlite3.connect(":memory:")
+        # call opens an independent empty DB, which would hide the startup
+        # migration from the router's per-request connections.
+        import os
+        import tempfile
+
+        from fastapi.testclient import TestClient
+        from webstaffr.workers.angel.router import create_app
+        from webstaffr.workers.angel.voice import NullVoiceBackend
+        from webstaffr.workers.angel.ghl import NullGHLClient
+
+        fd, db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        try:
+            app = create_app(db_path=db_path, voice_backend=NullVoiceBackend(), ghl_client=NullGHLClient())
+            client = TestClient(app)
+            _run_angel_router_smoke_requests(client)
+        finally:
+            os.remove(db_path)
+
+    def _run_angel_router_smoke_requests(client):
+
+        health_resp = client.get("/health")
+        assert health_resp.status_code == 200, f"unexpected /health status: {health_resp.status_code}"
+
+        chat_resp = client.post("/chat", json={"tenant_id": "healthcheck", "message": "hi"})
+        assert chat_resp.status_code == 200, f"unexpected /chat status: {chat_resp.status_code}"
+        assert "reply" in chat_resp.json()
+
+        webhook_resp = client.post(
+            "/webhooks/ghl",
+            json={"tenant_id": "healthcheck", "event_type": "website_lead", "contact_name": "Jane"},
+        )
+        assert webhook_resp.status_code == 200, f"unexpected /webhooks/ghl status: {webhook_resp.status_code}"
+
     check("imports", check_imports)
     check("smoke_workflow_executes_and_succeeds", check_smoke_workflow)
     check("tenant_isolation_enforced", check_tenant_isolation_enforced)
     check("failed_step_degrades_gracefully", check_failed_step_does_not_crash_executor)
     check("sqlite_persistence_round_trip", check_sqlite_persistence_round_trip)
+    check("angel_imports", check_angel_imports)
+    check("angel_booking_round_trip", check_angel_booking_round_trip)
+    check("angel_router_smoke", check_angel_router_smoke)
 
     print("WebStaffr health check")
     print("=" * 40)

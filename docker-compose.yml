@@ -1,0 +1,22 @@
+# Local testing only -- no hosting/deployment decision has been made (see
+# DECISIONS.md). This lets the Angel service be run and hit locally with
+# `docker compose up`.
+
+services:
+  angel:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Leave unset to run with NullVoiceBackend / NullGHLClient (safe
+      # defaults -- no external calls, no fabricated success). Set real
+      # values here (or in a local, gitignored .env file) to exercise the
+      # real Grok / GoHighLevel clients. Never commit real credentials.
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - GHL_API_KEY=${GHL_API_KEY:-}
+      - GHL_LOCATION_ID=${GHL_LOCATION_ID:-}
+    volumes:
+      - angel_data:/data
+
+volumes:
+  angel_data:
