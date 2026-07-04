@@ -34,6 +34,14 @@ Each recorded decision includes:
 **Tradeoffs accepted:** none identified — full-content governance docs carry no scope or implementation risk.
 **Status:** active, permanent — the "headers-only" rule for these four files does not apply going forward.
 
+**Decision:** Adopt a single-loop execution model (Verify → Decide → Execute → Verify) for routine, self-approvable work, in place of speculating further phases (e.g., Legacy Audit, Foundation Build, Feature Loop) in detail before they're reached.
+**Date:** 2026-07-04
+**Context:** A multi-phase system (7 named phases, a proposed skill YAML, a proposed CI enforcement layer) had been specified in increasing detail before any runtime existed to enforce it, causing repeated rework and drift across sessions.
+**Alternatives considered:** continuing to expand the multi-phase system in more detail; adding a CI-enforcement YAML and skill-schema file to gate phase transitions.
+**Reason rejected:** both add process weight with no corresponding runtime to enforce them — the actual enforcement mechanism in this project has always been conversational discipline (phase rules followed turn by turn), which the single-loop model uses directly instead of simulating through unused CI/YAML scaffolding.
+**Tradeoffs accepted:** less upfront specification of long-term phases in exchange for less speculative work; self-approval for a narrowly-defined safe category (reversible, no external interaction, no architecture/data-model shift, no new dependency) trades a small amount of oversight for reduced founder involvement, mitigated by mandatory logging of every self-approved change in commit messages and `TASKS.md`.
+**Status:** active.
+
 ## Tradeoffs Accepted
 See individual decisions above.
 

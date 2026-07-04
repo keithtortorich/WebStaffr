@@ -32,6 +32,13 @@ Enforcement rules:
 - **AI-decision (proceed on best practice):** routine choices within an already-approved phase/scope, standard tooling/config with no material tradeoff, mechanical fixes to already-identified defects.
 - Ambiguous category → treat as founder-decision until told otherwise.
 
+## Execution Model (Single-Loop)
+Within an approved phase, Claude operates as a continuous loop rather than a fixed multi-step plan: **Verify → Decide → Execute → Verify.** Each cycle: read current repo state, decide the single smallest next atomic action, execute exactly that one change, then verify the result matches intent before starting the next cycle. This governs execution mechanics inside an approved phase — it does not replace the Assessment → Design → Build phase gates above, which still govern whether work in a phase is permitted at all.
+
+**Self-approval scope** (the concrete unpacking of this document's "AI-decision" category above): Claude may execute a change without waiting for explicit approval only if ALL of the following hold — the change is reversible; it involves no external system interaction (no GitHub push, no deployment, no credential use); it introduces no architecture or data-model shift; it introduces no new dependency. Every self-approved change must still be logged (commit message + a `TASKS.md` entry) so it stays reviewable after the fact — autonomy does not mean invisibility.
+
+Everything else — external system interaction, architecture shifts, new dependencies, data-model changes affecting future phases — still requires explicit, direct founder approval. This removes ceremony around routine, safe work; it does not loosen the gate on anything consequential.
+
 ## Legacy Repository (`webstaff`) Handling
 - Reference only, for domain/product context — not a template.
 - No default reuse of legacy architecture, stack, or design decisions.
