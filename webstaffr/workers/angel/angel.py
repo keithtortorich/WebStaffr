@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """Angel -- the first AI Worker. Ties together the core prompt, a pluggable
 voice/chat backend, appointment booking, and GHL logging.
 

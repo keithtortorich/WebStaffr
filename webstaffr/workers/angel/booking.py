@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """Appointment booking -- tenant-scoped, persisted via SQLite (appointments
 table, migration 0002). Separate from GHL sync: an appointment is recorded
 locally first (source of truth for this system), then optionally synced

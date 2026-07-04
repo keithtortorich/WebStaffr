@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """FastAPI webhook handler for GoHighLevel events. Starts an Angel session
 for the relevant tenant when GHL sends a website-lead or missed-call event.
 

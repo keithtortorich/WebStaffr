@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """Repository pattern for persisting WorkflowDefinitions and ExecutionRecords.
 
 Every method takes tenant_id (or a tenant-scoped object) explicitly and

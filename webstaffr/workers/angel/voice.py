@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """Voice/chat backend abstraction for Angel.
 
 Kept as an explicit interface so Angel's logic never depends on a specific

@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """Connection handling and schema migrations for the SQLite persistence layer.
 
 Kept deliberately minimal: stdlib `sqlite3` only, no ORM, no new dependency.

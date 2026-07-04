@@ -1,3 +1,4 @@
+# OWNED_BY: CLAUDE
 # Local testing only -- no hosting/deployment decision has been made (see
 # DECISIONS.md). This lets the Angel service be run and hit locally with
 # `docker compose up`.

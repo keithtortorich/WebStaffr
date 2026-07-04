@@ -1,3 +1,4 @@
+// OWNED_BY: CLAUDE
 /**
  * angel-widget.js -- embeddable chat widget for Angel.
  *

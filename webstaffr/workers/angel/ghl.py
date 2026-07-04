@@ -1,3 +1,4 @@
+## OWNED_BY: CLAUDE
 """GoHighLevel (GHL) integration for Angel: syncing notes and appointments.
 
 Same pattern as voice.py -- an explicit interface, a safe Null default, and

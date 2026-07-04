@@ -1,3 +1,4 @@
+-- OWNED_BY: CLAUDE
 -- 0002_angel_appointments.sql
 -- Appointments booked by the Angel worker. Tenant-scoped like everything else.
 

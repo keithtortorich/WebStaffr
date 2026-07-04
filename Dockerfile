@@ -1,3 +1,4 @@
+# OWNED_BY: CLAUDE
 # WebStaffr Angel service -- FastAPI app serving /chat and /webhooks/ghl.
 # Minimal, single-stage build: this is for local testing (per the current
 # scope), not yet a production deployment decision (none has been made --

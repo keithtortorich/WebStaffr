@@ -1,3 +1,4 @@
+-- OWNED_BY: CLAUDE
 -- 0001_initial.sql
 -- Tenant-scoped tables for WorkflowDefinition and ExecutionRecord persistence.
 -- Every table carries tenant_id explicitly; nothing is queried without it.
