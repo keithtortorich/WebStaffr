@@ -214,8 +214,12 @@ class TestGHLClients(unittest.TestCase):
         client = NullGHLClient()
         client.log_note("c1", "note text")
         client.create_appointment("c1", "2026-08-01T15:00:00Z", "notes")
+        client.update_appointment("appt_1", "2026-08-02T15:00:00Z", "updated notes")
+        client.cancel_appointment("appt_1")
         self.assertEqual(len(client.logged_notes), 1)
         self.assertEqual(len(client.created_appointments), 1)
+        self.assertEqual(len(client.updated_appointments), 1)
+        self.assertEqual(len(client.cancelled_appointments), 1)
 
     def test_real_client_requires_credentials(self):
         old_key = os.environ.pop("GHL_API_KEY", None)
@@ -228,6 +232,36 @@ class TestGHLClients(unittest.TestCase):
                 os.environ["GHL_API_KEY"] = old_key
             if old_loc is not None:
                 os.environ["GHL_LOCATION_ID"] = old_loc
+
+    def test_update_appointment_calls_expected_endpoint(self):
+        """Verifies GoHighLevelClient.update_appointment() calls _request
+        with the right method/path -- mocked, no live GHL account to hit."""
+        client = GoHighLevelClient(api_key="k", location_id="loc")
+        captured = {}
+
+        def _fake_request(method, path, payload=None):
+            captured.update(method=method, path=path, payload=payload)
+            return {"ok": True}
+
+        client._request = _fake_request
+        result = client.update_appointment("appt_1", "2026-08-02T15:00:00Z", "updated notes")
+        self.assertEqual(captured["method"], "PUT")
+        self.assertIn("appt_1", captured["path"])
+        self.assertEqual(result, {"ok": True})
+
+    def test_cancel_appointment_calls_expected_endpoint(self):
+        client = GoHighLevelClient(api_key="k", location_id="loc")
+        captured = {}
+
+        def _fake_request(method, path, payload=None):
+            captured.update(method=method, path=path, payload=payload)
+            return {"ok": True}
+
+        client._request = _fake_request
+        result = client.cancel_appointment("appt_1")
+        self.assertEqual(captured["method"], "DELETE")
+        self.assertIn("appt_1", captured["path"])
+        self.assertEqual(result, {"ok": True})
 
 
 if __name__ == "__main__":

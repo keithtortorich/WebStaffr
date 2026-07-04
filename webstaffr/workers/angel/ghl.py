@@ -1,10 +1,14 @@
-## OWNED_BY: CLAUDE
+## OWNED_BY: GROK (extended from Claude base)
 """GoHighLevel (GHL) integration for Angel: syncing notes and appointments.
 
 Same pattern as voice.py -- an explicit interface, a safe Null default, and
 a real client that requires credentials and fails loudly without them.
 Uses stdlib urllib only, to avoid adding `requests` as another dependency
 for what is currently a small, infrequent call surface.
+
+update_appointment/cancel_appointment added by Grok (2026-07-04) as an
+explicitly-invited extension of this Claude-owned file, same pattern as
+GrokVoiceBackend in voice.py.
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ class GHLSyncError(RuntimeError):
 class GHLClient(Protocol):
     def log_note(self, contact_id: str, note: str) -> None: ...
     def create_appointment(self, contact_id: str, starts_at: str, notes: str) -> dict: ...
+    def update_appointment(self, appointment_id: str, starts_at: str, notes: str) -> dict: ...
+    def cancel_appointment(self, appointment_id: str) -> dict: ...
 
 
 class NullGHLClient:
@@ -36,6 +42,8 @@ class NullGHLClient:
     def __init__(self) -> None:
         self.logged_notes: list = []
         self.created_appointments: list = []
+        self.updated_appointments: list = []
+        self.cancelled_appointments: list = []
 
     def log_note(self, contact_id: str, note: str) -> None:
         self.logged_notes.append({"contact_id": contact_id, "note": note})
@@ -43,6 +51,21 @@ class NullGHLClient:
     def create_appointment(self, contact_id: str, starts_at: str, notes: str) -> dict:
         record = {"contact_id": contact_id, "starts_at": starts_at, "notes": notes, "ghl_id": None}
         self.created_appointments.append(record)
+        return record
+
+    def update_appointment(self, appointment_id: str, starts_at: str, notes: str) -> dict:
+        record = {
+            "appointment_id": appointment_id,
+            "starts_at": starts_at,
+            "notes": notes,
+            "action": "updated",
+        }
+        self.updated_appointments.append(record)
+        return record
+
+    def cancel_appointment(self, appointment_id: str) -> dict:
+        record = {"appointment_id": appointment_id, "action": "cancelled"}
+        self.cancelled_appointments.append(record)
         return record
 
 
@@ -98,3 +121,19 @@ class GoHighLevelClient:
                 "notes": notes,
             },
         )
+
+    def update_appointment(self, appointment_id: str, starts_at: str, notes: str) -> dict:
+        # [Unverified] endpoint/payload shape -- no live GHL account to
+        # confirm against; same treatment as the model name in voice.py.
+        return self._request(
+            "PUT",
+            f"/calendars/events/appointments/{appointment_id}",
+            {
+                "startTime": starts_at,
+                "notes": notes,
+            },
+        )
+
+    def cancel_appointment(self, appointment_id: str) -> dict:
+        # [Unverified] endpoint -- no live GHL account to confirm against.
+        return self._request("DELETE", f"/calendars/events/appointments/{appointment_id}")
