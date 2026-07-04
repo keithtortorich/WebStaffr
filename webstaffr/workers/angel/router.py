@@ -51,6 +51,31 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+class BookAppointmentRequest(BaseModel):
+    """Exposes Angel.book_appointment over HTTP. Previously only reachable
+    in-process (e.g. from the /chat or /webhooks/ghl handlers) -- this is
+    for callers that want to book directly without going through a
+    conversation turn at all (a future booking UI, a server-side
+    integration, etc.)."""
+
+    tenant_id: str
+    contact_name: str
+    starts_at: str
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    notes: Optional[str] = None
+    sync_to_ghl: bool = True
+    ghl_contact_id: Optional[str] = None
+
+
+class BookAppointmentResponse(BaseModel):
+    appointment_id: int
+    tenant_id: str
+    contact_name: str
+    starts_at: str
+    ghl_synced: bool
+
+
 SUPPORTED_EVENT_TYPES = {"website_lead", "missed_call"}
 
 
@@ -62,7 +87,16 @@ def create_app(
     """Factory rather than a module-level app instance, so tests (and
     Docker, and any future multi-tenant deployment shape) can construct an
     app pointed at a specific database and specific backends instead of
-    relying on hidden global state."""
+    relying on hidden global state.
+
+    IMPORTANT: this module also builds a default `app` instance at import
+    time (see bottom of file), for `uvicorn ...:app`. Migration must NOT
+    run eagerly inside this factory itself -- that would make merely
+    importing this module (as every test and the health check does) touch
+    disk and create/migrate a real db file as a side effect, independent
+    of whether that app instance is ever actually served. Migration stays
+    scoped to the ASGI lifespan event below, which only fires when the app
+    is actually started."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -112,6 +146,52 @@ def create_app(
 
         logger.info("chat_handled tenant=%s", req.tenant_id)
         return ChatResponse(reply=reply)
+
+    @app.post("/book", response_model=BookAppointmentResponse)
+    def book(req: BookAppointmentRequest) -> BookAppointmentResponse:
+        """Direct booking endpoint -- same underlying Angel.book_appointment
+        used by /chat and /webhooks/ghl, exposed for callers that don't go
+        through a conversation turn. Untrusted input is validated the same
+        way as the other endpoints: reject before touching the DB, not
+        after."""
+        try:
+            tenant = Tenant(tenant_id=req.tenant_id)
+        except InvalidTenantError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if not req.contact_name.strip():
+            raise HTTPException(status_code=400, detail="contact_name must not be empty")
+        if not req.starts_at.strip():
+            raise HTTPException(status_code=400, detail="starts_at must not be empty")
+
+        conn = get_connection()
+        try:
+            angel = Angel(tenant=tenant, conn=conn, voice_backend=voice_backend, ghl_client=ghl_client)
+            appt = angel.book_appointment(
+                contact_name=req.contact_name,
+                starts_at=req.starts_at,
+                contact_phone=req.contact_phone,
+                contact_email=req.contact_email,
+                notes=req.notes,
+                sync_to_ghl=req.sync_to_ghl,
+                ghl_contact_id=req.ghl_contact_id,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        logger.info(
+            "appointment_booked_via_http tenant=%s appointment_id=%s",
+            req.tenant_id,
+            appt.appointment_id,
+        )
+        return BookAppointmentResponse(
+            appointment_id=appt.appointment_id,
+            tenant_id=appt.tenant_id,
+            contact_name=appt.contact_name,
+            starts_at=appt.starts_at,
+            ghl_synced=appt.ghl_synced,
+        )
 
     @app.post("/webhooks/ghl")
     def ghl_webhook(event: GHLWebhookEvent) -> dict:

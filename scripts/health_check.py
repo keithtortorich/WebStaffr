@@ -178,8 +178,12 @@ def main() -> int:
         os.close(fd)
         try:
             app = create_app(db_path=db_path, voice_backend=NullVoiceBackend(), ghl_client=NullGHLClient())
-            client = TestClient(app)
-            _run_angel_router_smoke_requests(client)
+            # Must enter as a context manager for the app's lifespan
+            # (startup -> migrate()) to actually fire -- see router.py's
+            # create_app() docstring for why migration isn't run eagerly
+            # inside the factory itself.
+            with TestClient(app) as client:
+                _run_angel_router_smoke_requests(client)
         finally:
             os.remove(db_path)
 
@@ -197,6 +201,18 @@ def main() -> int:
             json={"tenant_id": "healthcheck", "event_type": "website_lead", "contact_name": "Jane"},
         )
         assert webhook_resp.status_code == 200, f"unexpected /webhooks/ghl status: {webhook_resp.status_code}"
+
+        book_resp = client.post(
+            "/book",
+            json={
+                "tenant_id": "healthcheck",
+                "contact_name": "Jane",
+                "starts_at": "2026-08-01T15:00:00Z",
+                "sync_to_ghl": False,
+            },
+        )
+        assert book_resp.status_code == 200, f"unexpected /book status: {book_resp.status_code}"
+        assert book_resp.json()["appointment_id"] is not None
 
     check("imports", check_imports)
     check("smoke_workflow_executes_and_succeeds", check_smoke_workflow)

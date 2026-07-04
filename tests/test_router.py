@@ -21,9 +21,16 @@ class RouterTestCase(unittest.TestCase):
         os.close(fd)
         self.ghl = NullGHLClient()
         app = create_app(db_path=self.db_path, voice_backend=NullVoiceBackend(), ghl_client=self.ghl)
-        self.client = TestClient(app)
+        # Enter the TestClient as a context manager so the app's ASGI
+        # lifespan (startup -> migrate()) actually fires. TestClient(app)
+        # without __enter__ does not reliably run lifespan events, which
+        # is exactly the gap that let a "no such table" bug slip past
+        # every endpoint that never happened to touch a table.
+        self._client_ctx = TestClient(app)
+        self.client = self._client_ctx.__enter__()
 
     def tearDown(self):
+        self._client_ctx.__exit__(None, None, None)
         os.remove(self.db_path)
 
 
@@ -43,6 +50,62 @@ class TestChatEndpoint(RouterTestCase):
 
     def test_chat_rejects_invalid_tenant_id(self):
         resp = self.client.post("/chat", json={"tenant_id": "", "message": "Hi there"})
+        self.assertEqual(resp.status_code, 400)
+
+
+class TestBookEndpoint(RouterTestCase):
+    def test_book_creates_appointment_without_ghl_sync(self):
+        resp = self.client.post(
+            "/book",
+            json={
+                "tenant_id": "acme",
+                "contact_name": "Jane Doe",
+                "starts_at": "2026-08-01T15:00:00Z",
+                "contact_phone": "555-1234",
+                "sync_to_ghl": False,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body["appointment_id"], int)
+        self.assertEqual(body["tenant_id"], "acme")
+        self.assertEqual(body["contact_name"], "Jane Doe")
+        self.assertFalse(body["ghl_synced"])
+
+    def test_book_syncs_to_ghl_when_requested(self):
+        resp = self.client.post(
+            "/book",
+            json={
+                "tenant_id": "acme",
+                "contact_name": "Jane Doe",
+                "starts_at": "2026-08-01T15:00:00Z",
+                "sync_to_ghl": True,
+                "ghl_contact_id": "ghl_contact_123",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ghl_synced"])
+        self.assertEqual(len(self.ghl.created_appointments), 1)
+
+    def test_book_rejects_invalid_tenant_id(self):
+        resp = self.client.post(
+            "/book",
+            json={"tenant_id": "bad id with spaces", "contact_name": "Jane", "starts_at": "2026-08-01T15:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_book_rejects_empty_contact_name(self):
+        resp = self.client.post(
+            "/book",
+            json={"tenant_id": "acme", "contact_name": "   ", "starts_at": "2026-08-01T15:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_book_rejects_empty_starts_at(self):
+        resp = self.client.post(
+            "/book",
+            json={"tenant_id": "acme", "contact_name": "Jane", "starts_at": ""},
+        )
         self.assertEqual(resp.status_code, 400)
 
 

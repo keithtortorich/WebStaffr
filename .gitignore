@@ -152,3 +152,9 @@ venv/
 
 # macOS
 .DS_Store
+
+# SQLite runtime data (never commit generated/local databases)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
